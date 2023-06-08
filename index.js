@@ -30,8 +30,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const usersCollection = client.db("artistryAcademiaDB").collection("users");
-    const classCollection = client.db("artistryAcademiaDB").collection("classes");
-    const selectClassCollection = client.db("artistryAcademiaDB").collection("selectClasses");
+    const classCollection = client
+      .db("artistryAcademiaDB")
+      .collection("classes");
+    const selectClassCollection = client
+      .db("artistryAcademiaDB")
+      .collection("selectClasses");
 
     //get all users to db
     app.get("/users", async (req, res) => {
@@ -39,9 +43,11 @@ async function run() {
       res.send(users);
     });
 
-     //get all instructor
-     app.get("/instructors", async (req, res) => {
-      const users = await usersCollection.find({ role: "instructor" }).toArray();
+    //get all instructor
+    app.get("/instructors", async (req, res) => {
+      const users = await usersCollection
+        .find({ role: "instructor" })
+        .toArray();
       res.send(users);
     });
 
@@ -109,30 +115,42 @@ async function run() {
 
     //get all class to db
     app.get("/approveClass", async (req, res) => {
-      const result = await classCollection.find({status: "approved"}).toArray();
+      const result = await classCollection
+        .find({ status: "approved" })
+        .toArray();
       res.send(result);
     });
 
-    //get all class by email
-    app.get('/myClass', async (req, res) => {
+    //get all class by email instructor
+    app.get("/myClass", async (req, res) => {
       const email = req.query.email;
       if (!email) {
-        res.send([])
+        res.send([]);
       }
-      const query = { email: email }
+      const query = { email: email };
       const result = await classCollection.find(query).toArray();
-      res.send(result)
-    })
+      res.send(result);
+    });
+
+    //get all class by email student
+    app.get("/selectedClass", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        res.send([]);
+      }
+      const query = { email: email };
+      const result = await selectClassCollection.find(query).toArray();
+      res.send(result);
+    });
 
     //select class by student
-    app.post('/selectClass', async (req, res) => {
+    app.post("/selectClass", async (req, res) => {
       const classData = req.body;
       const result = await selectClassCollection.insertOne(classData);
       res.send(result);
-    })
+    });
 
-
-    // approve class
+    // approve class by admin
     app.patch("/classes/approved/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -145,7 +163,7 @@ async function run() {
       res.send(result);
     });
 
-    // Deny class
+    // Deny class by admin
     app.patch("/classes/deny/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -159,9 +177,13 @@ async function run() {
       res.send(result);
     });
 
-
-   
-
+    // delete class by student
+    app.delete("/class/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await selectClassCollection.deleteOne(query);
+      res.send(result);
+    });
 
 
     // Connect the client to the server	(optional starting in v4.7)
