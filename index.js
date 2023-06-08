@@ -31,10 +31,17 @@ async function run() {
   try {
     const usersCollection = client.db("artistryAcademiaDB").collection("users");
     const classCollection = client.db("artistryAcademiaDB").collection("classes");
+    const selectClassCollection = client.db("artistryAcademiaDB").collection("selectClasses");
 
     //get all users to db
     app.get("/users", async (req, res) => {
       const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
+
+     //get all instructor
+     app.get("/instructors", async (req, res) => {
+      const users = await usersCollection.find({ role: "instructor" }).toArray();
       res.send(users);
     });
 
@@ -90,16 +97,40 @@ async function run() {
     //post class in Database
     app.post("/class", async (req, res) => {
       const classData = req.body;
-      console.log(classData);
       const result = await classCollection.insertOne(classData);
       res.send(result);
     });
 
-    //get all users to db
+    //get all class to db
     app.get("/classes", async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result);
     });
+
+    //get all class to db
+    app.get("/approveClass", async (req, res) => {
+      const result = await classCollection.find({status: "approved"}).toArray();
+      res.send(result);
+    });
+
+    //get all class by email
+    app.get('/myClass', async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        res.send([])
+      }
+      const query = { email: email }
+      const result = await classCollection.find(query).toArray();
+      res.send(result)
+    })
+
+    //select class by student
+    app.post('/selectClass', async (req, res) => {
+      const classData = req.body;
+      const result = await selectClassCollection.insertOne(classData);
+      res.send(result);
+    })
+
 
     // approve class
     app.patch("/classes/approved/:id", async (req, res) => {
@@ -127,6 +158,9 @@ async function run() {
       const result = await classCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
+
+
+   
 
 
 
