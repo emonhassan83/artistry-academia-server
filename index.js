@@ -30,6 +30,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const usersCollection = client.db("artistryAcademiaDB").collection("users");
+    const classCollection = client.db("artistryAcademiaDB").collection("classes");
 
     //get all users to db
     app.get("/users", async (req, res) => {
@@ -85,6 +86,49 @@ async function run() {
       const result = await usersCollection.updateOne(filter, updateDoc);
       res.send(result);
     });
+
+    //post class in Database
+    app.post("/class", async (req, res) => {
+      const classData = req.body;
+      console.log(classData);
+      const result = await classCollection.insertOne(classData);
+      res.send(result);
+    });
+
+    //get all users to db
+    app.get("/classes", async (req, res) => {
+      const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+
+    // approve class
+    app.patch("/classes/approved/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: "approved",
+        },
+      };
+      const result = await classCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+    // Deny class
+    app.patch("/classes/deny/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: "deny",
+        },
+      };
+
+      const result = await classCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+
+
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
