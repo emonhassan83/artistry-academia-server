@@ -80,19 +80,6 @@ async function run() {
       next();
     };
 
-    // verify Instructor
-    const verifyInstructor = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
-      if (user?.role !== "instructor") {
-        return res
-          .status(403)
-          .send({ error: true, message: "forbidden message" });
-      }
-      next();
-    };
-
     //get all users to db
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
       const users = await usersCollection.find().toArray();
@@ -183,7 +170,7 @@ async function run() {
       const result = { instructor: user?.role === "instructor" };
       res.send(result);
     });
-    
+
 
     //post class in Database
     app.post("/class", async (req, res) => {
