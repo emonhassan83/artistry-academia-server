@@ -58,7 +58,9 @@ async function run() {
     const selectClassCollection = client
       .db("artistryAcademiaDB")
       .collection("selectClasses");
-    const paymentClassCollection = client.db("artistryAcademiaDB").collection('paymentClasses');
+    const paymentClassCollection = client
+      .db("artistryAcademiaDB")
+      .collection("paymentClasses");
 
     //Generate jwt token
     app.post("/jwt", async (req, res) => {
@@ -222,7 +224,7 @@ async function run() {
       res.send(result);
     });
 
-    //select class by student TODO: unique class added 
+    //select class by student TODO: unique class added
     app.post("/selectClass", async (req, res) => {
       const classData = req.body;
       const result = await selectClassCollection.insertOne(classData);
@@ -264,15 +266,25 @@ async function run() {
       res.send(result);
     });
 
+    //get student all enroll class by email
+    app.get("/enrollClass", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        res.send([]);
+      }
+      const query = { email: email };
+      const result = await paymentClassCollection.find(query).sort({ date: -1 }).toArray();
+      res.send(result);
+    });
 
     //save payment class data to database
-    app.post('/paymentClass', async (req, res) => {
+    app.post("/paymentClass", async (req, res) => {
       const classData = req.body;
       try {
         const result = await paymentClassCollection.insertOne(classData);
-        const query = { _id: new ObjectId(classData._id)}
+        const query = { _id: new ObjectId(classData._id) };
         const deleteResult = await selectClassCollection.deleteOne(query);
-        res.send({result, deleteResult});
+        res.send({ result, deleteResult });
       } catch (error) {
         if (error.code === 11000) {
           // Duplicate key error
@@ -282,8 +294,7 @@ async function run() {
           res.status(500).send("Internal server error");
         }
       }
-    })
-
+    });
 
     // create payment intent
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
