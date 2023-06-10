@@ -210,7 +210,7 @@ async function run() {
     // Update A class by admin feed  message
     app.patch("/class/:id", verifyJWT, async (req, res) => {
       const classData = req.body;
-      const id = req.params.id
+      const id = req.params.id;
 
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
@@ -301,20 +301,10 @@ async function run() {
     //save payment class data to database
     app.post("/paymentClass", async (req, res) => {
       const classData = req.body;
-      try {
-        const result = await paymentClassCollection.insertOne(classData);
-        const query = { _id: new ObjectId(classData._id) };
-        const deleteResult = await selectClassCollection.deleteOne(query);
-        res.send({ result, deleteResult });
-      } catch (error) {
-        if (error.code === 11000) {
-          // Duplicate key error
-          res.status(400).send("Duplicate entry");
-        } else {
-          // Other errors
-          res.status(500).send("Internal server error");
-        }
-      }
+      const result = await paymentClassCollection.insertOne(classData);
+      const query = { _id: new ObjectId(classData._id) };
+      const deleteResult = await selectClassCollection.deleteOne(query);
+      res.send({ result, deleteResult });
     });
 
     // create payment intent
