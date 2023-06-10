@@ -207,6 +207,24 @@ async function run() {
       res.send(result);
     });
 
+    // Update A class by admin feed  message
+    app.patch("/class/:id", verifyJWT, async (req, res) => {
+      const classData = req.body;
+      const id = req.params.id
+
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: classData,
+      };
+      const result = await classCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+    });
+
     //get all class by email student
     app.get("/selectedClass", verifyJWT, async (req, res) => {
       const email = req.query.email;
@@ -224,7 +242,7 @@ async function run() {
       res.send(result);
     });
 
-    //select class by student TODO: unique class added
+    //select class by student
     app.post("/selectClass", async (req, res) => {
       const classData = req.body;
       const result = await selectClassCollection.insertOne(classData);
@@ -273,7 +291,10 @@ async function run() {
         res.send([]);
       }
       const query = { email: email };
-      const result = await paymentClassCollection.find(query).sort({ date: -1 }).toArray();
+      const result = await paymentClassCollection
+        .find(query)
+        .sort({ date: -1 })
+        .toArray();
       res.send(result);
     });
 
