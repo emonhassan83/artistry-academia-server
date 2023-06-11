@@ -28,6 +28,7 @@ const client = new MongoClient(uri, {
   },
 });
 
+
 // validate jwt
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
@@ -62,6 +63,7 @@ async function run() {
       .db("artistryAcademiaDB")
       .collection("paymentClasses");
 
+
     //Generate jwt token
     app.post("/jwt", async (req, res) => {
       const email = req.body;
@@ -70,6 +72,7 @@ async function run() {
       });
       res.send({ token });
     });
+
 
     // verify admin
     const verifyAdmin = async (req, res, next) => {
@@ -83,6 +86,8 @@ async function run() {
       }
       next();
     };
+
+    /*********** USER RELATE APIS **********/ 
 
     //get all users to db
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
@@ -174,6 +179,9 @@ async function run() {
       const result = { instructor: user?.role === "instructor" };
       res.send(result);
     });
+
+
+    /*********** CLASS RELATE APIS *************/
 
     //post class in Database
     app.post("/class", async (req, res) => {
@@ -284,6 +292,8 @@ async function run() {
       res.send(result);
     });
 
+    /* ENROLL CLASS RELATED APIS */
+
     //get student all enroll class by email
     app.get("/enrollClass", async (req, res) => {
       const email = req.query.email;
@@ -297,6 +307,8 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
+    /* PAYMENT RELATED APIS */
 
     //save payment class data to database
     app.post("/paymentClass", async (req, res) => {
@@ -323,6 +335,7 @@ async function run() {
       });
     });
 
+    
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
