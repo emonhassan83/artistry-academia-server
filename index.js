@@ -235,7 +235,25 @@ async function run() {
       res.send(result);
     });
 
-    // Update A class by admin feed  message
+    // Update A class by instructor 
+    app.patch("/update-class/:id", async (req, res) => {
+      const classData = req.body;
+      const id = req.params.id;
+
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: classData,
+      };
+      const result = await classCollection.updateOne(
+        filter,
+        updateDoc,
+        options
+      );
+      res.send(result);
+    });
+
+    // Give feedback A class by admin feed message
     app.patch("/class/:id", verifyJWT, async (req, res) => {
       const classData = req.body;
       const id = req.params.id;
@@ -325,7 +343,7 @@ async function run() {
       res.send(result);
     });
 
-    
+
     /************ ENROLL CLASS RELATED APIS **********/
 
     //get student all enroll class by email
