@@ -28,7 +28,6 @@ const client = new MongoClient(uri, {
   },
 });
 
-
 // validate jwt
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
@@ -63,7 +62,6 @@ async function run() {
       .db("artistryAcademiaDB")
       .collection("paymentClasses");
 
-
     //Generate jwt token
     app.post("/jwt", async (req, res) => {
       const email = req.body;
@@ -72,7 +70,6 @@ async function run() {
       });
       res.send({ token });
     });
-
 
     // verify admin
     const verifyAdmin = async (req, res, next) => {
@@ -87,7 +84,8 @@ async function run() {
       next();
     };
 
-    /*********** USER RELATE APIS **********/ 
+
+    /*********** USER RELATE APIS **********/
 
     //get all users to db
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
@@ -180,7 +178,7 @@ async function run() {
       res.send(result);
     });
 
-    //Update user by email in DB 
+    //Update user by email in DB
     app.put("/user/:email", async (req, res) => {
       const email = req.params.email;
       const user = req.body;
@@ -191,6 +189,14 @@ async function run() {
       };
 
       const result = await usersCollection.updateOne(query, updateDoc, options);
+      res.send(result);
+    });
+
+    //delete a user
+    app.delete("/user/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await usersCollection.deleteOne(filter);
       res.send(result);
     });
 
@@ -247,30 +253,6 @@ async function run() {
       res.send(result);
     });
 
-    //get all class by email student
-    app.get("/selectedClass", verifyJWT, async (req, res) => {
-      const email = req.query.email;
-      if (!email) {
-        res.send([]);
-      }
-      const decodedEmail = req.decoded.email;
-      if (email !== decodedEmail) {
-        return res
-          .status(403)
-          .send({ error: true, message: "Forbidden access" });
-      }
-      const query = { email: email };
-      const result = await selectClassCollection.find(query).toArray();
-      res.send(result);
-    });
-
-    //select class by student
-    app.post("/selectClass", async (req, res) => {
-      const classData = req.body;
-      const result = await selectClassCollection.insertOne(classData);
-      res.send(result);
-    });
-
     // approve class by admin
     app.patch("/classes/approved/:id", async (req, res) => {
       const id = req.params.id;
@@ -299,14 +281,52 @@ async function run() {
     });
 
     // delete class by student
+    app.delete("/delete-class/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const query = { _id: new ObjectId(id) };
+      const result = await classCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+    /*********** SELECT CLASS RELATE APIS *************/
+
+    //get all class by email student
+    app.get("/selectedClass", verifyJWT, async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        res.send([]);
+      }
+      const decodedEmail = req.decoded.email;
+      if (email !== decodedEmail) {
+        return res
+          .status(403)
+          .send({ error: true, message: "Forbidden access" });
+      }
+      const query = { email: email };
+      const result = await selectClassCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    //select class by student
+    app.post("/selectClass", async (req, res) => {
+      const classData = req.body;
+      const result = await selectClassCollection.insertOne(classData);
+      res.send(result);
+    });
+
+    // delete class by student
     app.delete("/class/:id", async (req, res) => {
       const id = req.params.id;
+      console.log(id);
       const query = { _id: new ObjectId(id) };
       const result = await selectClassCollection.deleteOne(query);
       res.send(result);
     });
 
-    /* ENROLL CLASS RELATED APIS */
+    
+    /************ ENROLL CLASS RELATED APIS **********/
 
     //get student all enroll class by email
     app.get("/enrollClass", async (req, res) => {
@@ -322,7 +342,8 @@ async function run() {
       res.send(result);
     });
 
-    /* PAYMENT RELATED APIS */
+
+    /********** PAYMENT RELATED APIS ***********/
 
     //save payment class data to database
     app.post("/paymentClass", async (req, res) => {
@@ -349,7 +370,6 @@ async function run() {
       });
     });
 
-    
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
