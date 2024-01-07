@@ -84,7 +84,6 @@ async function run() {
       next();
     };
 
-
     /*********** USER RELATE APIS **********/
 
     //get all users to db
@@ -101,7 +100,7 @@ async function run() {
       res.send(users);
     });
 
-    // Get user
+    // Get user by email
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
@@ -200,7 +199,6 @@ async function run() {
       res.send(result);
     });
 
-
     /*********** CLASS RELATE APIS *************/
 
     //post class in Database
@@ -216,7 +214,7 @@ async function run() {
       res.send(result);
     });
 
-    //get all class to db
+    //get all approve class to db
     app.get("/approveClass", async (req, res) => {
       const result = await classCollection
         .find({ status: "approved" })
@@ -225,8 +223,8 @@ async function run() {
     });
 
     //get all class by email instructor
-    app.get("/myClass", async (req, res) => {
-      const email = req.query.email;
+    app.get("/myClass/:email", async (req, res) => {
+      const { email } = req.params;
       if (!email) {
         res.send([]);
       }
@@ -235,7 +233,7 @@ async function run() {
       res.send(result);
     });
 
-    // Update A class by instructor 
+    // Update A class by instructor
     app.patch("/update-class/:id", async (req, res) => {
       const classData = req.body;
       const id = req.params.id;
@@ -301,12 +299,10 @@ async function run() {
     // delete class by student
     app.delete("/delete-class/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
       const query = { _id: new ObjectId(id) };
       const result = await classCollection.deleteOne(query);
       res.send(result);
     });
-
 
     /*********** SELECT CLASS RELATE APIS *************/
 
@@ -337,12 +333,10 @@ async function run() {
     // delete class by student
     app.delete("/class/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
       const query = { _id: new ObjectId(id) };
       const result = await selectClassCollection.deleteOne(query);
       res.send(result);
     });
-
 
     /************ ENROLL CLASS RELATED APIS **********/
 
@@ -359,7 +353,6 @@ async function run() {
         .toArray();
       res.send(result);
     });
-
 
     /********** PAYMENT RELATED APIS ***********/
 
