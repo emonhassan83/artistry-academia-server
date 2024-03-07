@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
-// middleware
+//* middlewares
 const corsOptions = {
   origin: "*",
   credentials: true,
@@ -16,7 +16,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-//mongodb connection
+//* mongodb connection
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.mt8kgrw.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -28,25 +28,37 @@ const client = new MongoClient(uri, {
   },
 });
 
-// validate jwt
+//* validate jwt
 const verifyJWT = (req, res, next) => {
-  const authorization = req.headers.authorization;
-  if (!authorization) {
-    return res
-      .status(401)
-      .send({ error: true, message: "unauthorized access" });
-  }
-  // bearer token
-  const token = authorization.split(" ")[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) {
+  try {
+    const { authorization } = req.headers;
+    if (!authorization) {
       return res
         .status(401)
-        .send({ error: true, message: "unauthorized access" });
+        .send({ error: true, message: "Unauthorized access" });
     }
-    req.decoded = decoded;
-    next();
-  });
+
+    //* access bearer token
+    const token = authorization.split(" ")[1];
+    if (!token) {
+      throw new Error("Token missing in decoded JWT!");
+    }
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+      if (err) {
+        return res
+          .status(401)
+          .send({ error: true, message: "Unauthorized access" });
+      }
+
+      req.decoded = decoded;
+      next();
+    });
+  } catch (error) {
+    return res
+      .status(401)
+      .send({ error: true, message: "Unauthorized access" });
+  }
 };
 
 async function run() {
@@ -62,323 +74,562 @@ async function run() {
       .db("artistryAcademiaDB")
       .collection("paymentClasses");
 
-    //Generate jwt token
+    //* Generate jwt token
     app.post("/jwt", async (req, res) => {
-      const email = req.body;
-      const token = jwt.sign(email, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "10h",
-      });
-      res.send({ token });
+      try {
+        const email = req.body;
+        const token = jwt.sign(email, process.env.ACCESS_TOKEN_SECRET, {
+          expiresIn: "7d",
+        });
+
+        res.send({ token });
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // verify admin
+    //* verify admin
     const verifyAdmin = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
-      if (user?.role !== "admin") {
-        return res
-          .status(403)
-          .send({ error: true, message: "forbidden message" });
+      try {
+        const { email } = req.decoded;
+        if (!email) {
+          throw new Error("Email is missing in decoded !");
+        }
+
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        if (user?.role !== "admin") {
+          return res.status(403).send({
+            error: true,
+            message: "Forbidden message! You are not admin!",
+          });
+        }
+        next();
+      } catch (error) {
+        return res.status(403).send({
+          error: true,
+          message: "Forbidden! You are not an admin!",
+        });
       }
-      next();
     };
 
-    /*********** USER RELATE APIS **********/
+    //* verify instructor
+    const verifyInstructors = async (req, res, next) => {
+      try {
+        const email = req.decoded.email;
+        if (!email) {
+          throw new Error("Email is missing in decoded !");
+        }
 
-    //get all users to db
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        if (user?.role !== "instructor") {
+          return res.status(403).send({
+            error: true,
+            message: "Forbidden message! You are not instructor!",
+          });
+        }
+        next();
+      } catch (error) {
+        return res.status(403).send({
+          error: true,
+          message: "Forbidden! You are not an admin!",
+        });
+      }
+    };
+
+    //? ********** USER RELATE APIS **********/
+
+    //* get all users to db
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
-      const users = await usersCollection.find().toArray();
-      res.send(users);
+      try {
+        const users = await usersCollection.find().toArray();
+        if (!users) {
+          throw new Error("User not found here!");
+        }
+
+        res.send(users);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get all instructor
+    //* get all instructor
     app.get("/instructors", async (req, res) => {
-      const users = await usersCollection
-        .find({ role: "instructor" })
-        .toArray();
-      res.send(users);
+      try {
+        const instructors = await usersCollection
+          .find({ role: "instructor" })
+          .toArray();
+        if (!instructors) {
+          throw new Error("Instructors not found here!");
+        }
+
+        res.send(instructors);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // Get user by email
+    //* Get user by email
     app.get("/users/:email", async (req, res) => {
-      const email = req.params.email;
-      const query = { email: email };
-      const result = await usersCollection.findOne(query);
-      res.send(result);
+      try {
+        const { email } = req.params;
+
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          throw new Error("User not found here!");
+        }
+
+        res.send(user);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //save user email and role in DB
+    //* save user email and role in DB
     app.put("/users/:email", async (req, res) => {
-      const email = req.params.email;
-      const user = req.body;
-      const query = { email: email };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: user,
-      };
-      const result = await usersCollection.updateOne(query, updateDoc, options);
-      res.send(result);
+      try {
+        const { email } = req.params;
+        const user = req.body;
+
+        const saveUser = await usersCollection.updateOne(
+          { email: email },
+          {
+            $set: user,
+          },
+          { upsert: true }
+        );
+
+        res.send(saveUser);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // make admin
+    //* make admin
     app.patch("/users/admin/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
 
-      const result = await usersCollection.updateOne(filter, updateDoc);
-      res.send(result);
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            role: "admin",
+          },
+        };
+
+        const result = await usersCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get admin and secure route
+    //* get admin and secure route
     app.get("/users/admin/:email", verifyJWT, async (req, res) => {
-      const email = req.params.email;
+      try {
+        const { email } = req.params;
+        if (req.decoded.email !== email) {
+          res.send({ admin: false });
+        }
 
-      if (req.decoded.email !== email) {
-        res.send({ admin: false });
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          return res.send({ admin: false });
+        }
+
+        const result = { admin: user?.role === "admin" };
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
       }
-
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
-      const result = { admin: user?.role === "admin" };
-      res.send(result);
     });
 
-    // make Instructor
+    //* make Instructor
     app.patch("/users/instructor/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          role: "instructor",
-        },
-      };
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
 
-      const result = await usersCollection.updateOne(filter, updateDoc);
-      res.send(result);
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            role: "instructor",
+          },
+        };
+
+        const result = await usersCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get instructors and secure route
+    //* get instructors and secure route
     app.get("/users/instructor/:email", verifyJWT, async (req, res) => {
-      const email = req.params.email;
+      try {
+        const { email } = req.params;
+        if (req.decoded.email !== email) {
+          res.send({ instructor: false });
+        }
 
-      if (req.decoded.email !== email) {
-        res.send({ instructor: false });
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          return res.send({ instructor: false });
+        }
+
+        const result = { instructor: user?.role === "instructor" };
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
       }
-
-      const query = { email: email };
-      const user = await usersCollection.findOne(query);
-      const result = { instructor: user?.role === "instructor" };
-      res.send(result);
     });
 
-    //Update user by email in DB
+    //* Update user by email in DB
     app.put("/user/:email", async (req, res) => {
-      const email = req.params.email;
-      const user = req.body;
-      const query = { email: email };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: user,
-      };
+      try {
+        const { email } = req.params;
+        const user = req.body;
 
-      const result = await usersCollection.updateOne(query, updateDoc, options);
-      res.send(result);
+        const result = await usersCollection.updateOne(
+          { email: email },
+          {
+            $set: user,
+          },
+          { upsert: true }
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //delete a user
+    //* delete a user
     app.delete("/user/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const result = await usersCollection.deleteOne(filter);
-      res.send(result);
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const result = await usersCollection.deleteOne(filter);
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    /*********** CLASS RELATE APIS *************/
+    //? *********** CLASS RELATE APIS *************/
 
-    //post class in Database
+    //* post class in Database
     app.post("/class", async (req, res) => {
-      const classData = req.body;
-      const result = await classCollection.insertOne(classData);
-      res.send(result);
+      try {
+        const classData = req.body;
+
+        const saveClass = await classCollection.insertOne(classData);
+        if (!saveClass) {
+          throw new Error("Class is not save in database yet!");
+        }
+
+        res.send(saveClass);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get all class to db
+    //* get all class to db
     app.get("/classes", async (req, res) => {
-      const result = await classCollection.find().toArray();
-      res.send(result);
+      try {
+        const classes = await classCollection.find().toArray();
+        if (!classes) {
+          throw new Error("Class not found !");
+        }
+
+        res.send(classes);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get all approve class to db
+    //* get all approve class to db
     app.get("/approveClass", async (req, res) => {
-      const result = await classCollection
-        .find({ status: "approved" })
-        .toArray();
-      res.send(result);
+      try {
+        const result = await classCollection
+          .find({ status: "approved" })
+          .toArray();
+        if (!result) {
+          throw new Error("Approved class not found !");
+        }
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    //get all class by email instructor
+    //* get all class by email instructor
     app.get("/myClass/:email", async (req, res) => {
-      const { email } = req.params;
-      if (!email) {
-        res.send([]);
+      try {
+        const { email } = req.params;
+        if (!email) {
+          res.send([]);
+        }
+
+        const result = await classCollection.find({ email: email }).toArray();
+        if (!result) {
+          throw new Error("Approved my class not found !");
+        }
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
       }
-      const query = { email: email };
-      const result = await classCollection.find(query).toArray();
-      res.send(result);
     });
 
-    // Update A class by instructor
+    //* Update A class by instructor
     app.patch("/update-class/:id", async (req, res) => {
-      const classData = req.body;
-      const id = req.params.id;
+      try {
+        const classData = req.body;
 
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: classData,
-      };
-      const result = await classCollection.updateOne(
-        filter,
-        updateDoc,
-        options
-      );
-      res.send(result);
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const updateDoc = {
+          $set: classData,
+        };
+        const result = await classCollection.updateOne(
+          filter,
+          updateDoc,
+          options
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // Give feedback A class by admin feed message
+    //* Give feedback A class by admin feed message
     app.patch("/class/:id", verifyJWT, async (req, res) => {
-      const classData = req.body;
-      const id = req.params.id;
+      try {
+        const classData = req.body;
 
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updateDoc = {
-        $set: classData,
-      };
-      const result = await classCollection.updateOne(
-        filter,
-        updateDoc,
-        options
-      );
-      res.send(result);
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const updateDoc = {
+          $set: classData,
+        };
+        const result = await classCollection.updateOne(
+          filter,
+          updateDoc,
+          options
+        );
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // approve class by admin
+    //* approve class by admin
     app.patch("/classes/approved/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          status: "approved",
-        },
-      };
-      const result = await classCollection.updateOne(filter, updateDoc);
-      res.send(result);
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status: "approved",
+          },
+        };
+
+        const result = await classCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // Deny class by admin
+    //* Deny class by admin
     app.patch("/classes/deny/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          status: "deny",
-        },
-      };
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
 
-      const result = await classCollection.updateOne(filter, updateDoc);
-      res.send(result);
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            status: "deny",
+          },
+        };
+
+        const result = await classCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // delete class by student
+    //* delete class by student
     app.delete("/delete-class/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await classCollection.deleteOne(query);
-      res.send(result);
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const query = { _id: new ObjectId(id) };
+        const result = await classCollection.deleteOne(query);
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    /*********** SELECT CLASS RELATE APIS *************/
+    //? *********** SELECT CLASS RELATE APIS *************/
 
-    //get all class by email student
+    //* get all class by email student
     app.get("/selectedClass", verifyJWT, async (req, res) => {
-      const email = req.query.email;
-      if (!email) {
-        res.send([]);
+      try {
+        const { email } = req.query;
+        if (!email) {
+          res.send([]);
+        }
+
+        const decodedEmail = req.decoded.email;
+        if (email !== decodedEmail) {
+          return res
+            .status(403)
+            .send({ error: true, message: "Forbidden access" });
+        }
+
+        const result = await selectClassCollection
+          .find({ email: email })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
       }
-      const decodedEmail = req.decoded.email;
-      if (email !== decodedEmail) {
-        return res
-          .status(403)
-          .send({ error: true, message: "Forbidden access" });
-      }
-      const query = { email: email };
-      const result = await selectClassCollection.find(query).toArray();
-      res.send(result);
     });
 
-    //select class by student
+    //* select class by student
     app.post("/selectClass", async (req, res) => {
-      const classData = req.body;
-      const result = await selectClassCollection.insertOne(classData);
-      res.send(result);
-    });
+      try {
+        const classData = req.body;
 
-    // delete class by student
-    app.delete("/class/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await selectClassCollection.deleteOne(query);
-      res.send(result);
-    });
+        const result = await selectClassCollection.insertOne(classData);
+        if (!result) {
+          throw new Error("Select class failed !");
+        }
 
-    /************ ENROLL CLASS RELATED APIS **********/
-
-    //get student all enroll class by email
-    app.get("/enrollClass", async (req, res) => {
-      const email = req.query.email;
-      if (!email) {
-        res.send([]);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
       }
-      const query = { email: email };
-      const result = await paymentClassCollection
-        .find(query)
-        .sort({ date: -1 })
-        .toArray();
-      res.send(result);
     });
 
-    /********** PAYMENT RELATED APIS ***********/
+    //* delete class by student
+    app.delete("/class/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
 
-    //save payment class data to database
+        const query = { _id: new ObjectId(id) };
+        const result = await selectClassCollection.deleteOne(query);
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    });
+
+    //? ************ ENROLL CLASS RELATED APIS **********/
+
+    //* get student all enroll class by email
+    app.get("/enrollClass", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) {
+          res.send([]);
+        }
+
+        const result = await paymentClassCollection
+          .find({ email: email })
+          .sort({ date: -1 })
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    });
+
+    //? ********** PAYMENT RELATED APIS ***********/
+
+    //* save payment class data to database
     app.post("/paymentClass", async (req, res) => {
-      const classData = req.body;
-      const result = await paymentClassCollection.insertOne(classData);
-      const query = { _id: new ObjectId(classData._id) };
-      const deleteResult = await selectClassCollection.deleteOne(query);
-      res.send({ result, deleteResult });
+      try {
+        const classData = req.body;
+        const result = await paymentClassCollection.insertOne(classData);
+
+        const query = { _id: new ObjectId(classData._id) };
+        const deleteResult = await selectClassCollection.deleteOne(query);
+
+        res.send({ result, deleteResult });
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
-    // create payment intent
+    //* create payment intent
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
-      const { price } = req.body;
-      const amount = parseInt(price * 100);
+      try {
+        const { price } = req.body;
+        const amount = parseInt(price * 100);
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: amount,
-        currency: "usd",
-        payment_method_types: ["card"],
-      });
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
 
-      res.send({
-        clientSecret: paymentIntent.client_secret,
-      });
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+        });
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
     });
 
     // Connect the client to the server	(optional starting in v4.7)
