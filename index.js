@@ -67,6 +67,9 @@ async function run() {
     const classCollection = client
       .db("artistryAcademiaDB")
       .collection("classes");
+    const instructorBioCollection = client
+      .db("artistryAcademiaDB")
+      .collection("instructorBio");
     const selectClassCollection = client
       .db("artistryAcademiaDB")
       .collection("selectClasses");
@@ -139,7 +142,35 @@ async function run() {
       } catch (error) {
         return res.status(403).send({
           error: true,
-          message: "Forbidden! You are not an admin!",
+          message: "Forbidden! You are not an instructor!",
+        });
+      }
+    };
+
+    //* verify student
+    const verifyStudents = async (req, res, next) => {
+      try {
+        const email = req.decoded.email;
+        if (!email) {
+          throw new Error("Email is missing in decoded !");
+        }
+
+        const user = await usersCollection.findOne({ email: email });
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        if (user?.role !== "student") {
+          return res.status(403).send({
+            error: true,
+            message: "Forbidden message! You are not student!",
+          });
+        }
+        next();
+      } catch (error) {
+        return res.status(403).send({
+          error: true,
+          message: "Forbidden! You are not an student!",
         });
       }
     };
@@ -147,7 +178,7 @@ async function run() {
     //? ********** USER RELATE APIS **********/
 
     //* get all users to db
-    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/users", verifyJWT, async (req, res) => {
       try {
         const users = await usersCollection.find().toArray();
         if (!users) {
@@ -155,6 +186,27 @@ async function run() {
         }
 
         res.send(users);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    });
+
+    //* get a user by to db
+    app.get("/user/:id", verifyJWT, async (req, res) => {
+      try {
+        const {id} = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+
+        const user = await usersCollection.findOne(filter);
+        if (!user) {
+          throw new Error("User not found here!");
+        }
+
+        res.send(user);
       } catch (error) {
         res.status(500).send({ error: true, message: "Internal server error" });
       }
@@ -192,11 +244,14 @@ async function run() {
       }
     });
 
-    //* save user email and role in DB
+    //* save user in DB
     app.put("/users/:email", async (req, res) => {
       try {
         const { email } = req.params;
         const user = req.body;
+
+        //? Set createdAt field to current timestamp
+        user.createdAt = new Date();
 
         const saveUser = await usersCollection.updateOne(
           { email: email },
@@ -333,9 +388,55 @@ async function run() {
       }
     });
 
+    //? *********** INSTRUCTOR BIO RELATED APIS *************/
+
+    //* save instructors bio and change user role to instructor in db
+    app.post("/save-instructor-bio", async (req, res) => {
+      try {
+        const bioData = req.body;
+        const { user: userId } = bioData;
+        if (!userId || !ObjectId.isValid(userId)) {
+          throw new Error("Invalid or missing userId parameter");
+        }
+
+        const filter = { _id: new ObjectId(userId) };
+        const updateDoc = {
+          $set: {
+            role: "instructor",
+          },
+        };
+
+        const saveBio = await instructorBioCollection.insertOne(bioData);
+        const updateUser = await usersCollection.updateOne(filter, updateDoc);
+
+        res.send({ saveBio, updateUser });
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    });
+
+    //* get instructors bio by userId
+    app.get("/get-instructor-bio/:id", verifyJWT, async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const bio = await instructorBioCollection.findOne({ user: id });
+        if (!bio) {
+          throw new Error("This instructors bio dose not found");
+        }
+
+        res.send(bio);
+      } catch (error) {
+        res.status(500).send({ error: true, message: "Internal server error" });
+      }
+    });
+
     //? *********** CLASS RELATE APIS *************/
 
-    //* post class in Database
+    //* save class in Database
     app.post("/class", async (req, res) => {
       try {
         const classData = req.body;
@@ -391,7 +492,7 @@ async function run() {
 
         const result = await classCollection.find({ email: email }).toArray();
         if (!result) {
-          throw new Error("Approved my class not found !");
+          throw new Error("Instructor all classes not found !");
         }
 
         res.send(result);
@@ -498,7 +599,7 @@ async function run() {
       }
     });
 
-    //* delete class by student
+    //* delete class from database
     app.delete("/delete-class/:id", async (req, res) => {
       try {
         const { id } = req.params;
@@ -517,7 +618,7 @@ async function run() {
 
     //? *********** SELECT CLASS RELATE APIS *************/
 
-    //* get all class by email student
+    //* get all selected class by student email
     app.get("/selectedClass", verifyJWT, async (req, res) => {
       try {
         const { email } = req.query;
@@ -541,7 +642,7 @@ async function run() {
       }
     });
 
-    //* select class by student
+    //* save (select) class by student
     app.post("/selectClass", async (req, res) => {
       try {
         const classData = req.body;
@@ -557,7 +658,7 @@ async function run() {
       }
     });
 
-    //* delete class by student
+    //* delete select class by student
     app.delete("/class/:id", async (req, res) => {
       try {
         const { id } = req.params;
