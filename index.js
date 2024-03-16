@@ -35,7 +35,7 @@ const verifyJWT = (req, res, next) => {
     if (!authorization) {
       return res
         .status(401)
-        .send({ error: true, message: "Unauthorized access" });
+        .send({ success: false, message: "Unauthorized access" });
     }
 
     //* access bearer token
@@ -48,7 +48,7 @@ const verifyJWT = (req, res, next) => {
       if (err) {
         return res
           .status(401)
-          .send({ error: true, message: "Unauthorized access" });
+          .send({ success: false, message: "Unauthorized access" });
       }
 
       req.decoded = decoded;
@@ -57,7 +57,7 @@ const verifyJWT = (req, res, next) => {
   } catch (error) {
     return res
       .status(401)
-      .send({ error: true, message: "Unauthorized access" });
+      .send({ success: false, message: "Unauthorized access" });
   }
 };
 
@@ -77,17 +77,19 @@ async function run() {
       .db("artistryAcademiaDB")
       .collection("paymentClasses");
 
-    //* Generate jwt token
+    //* Generate jwt token !TODO: change jwt expiry
     app.post("/jwt", async (req, res) => {
       try {
         const email = req.body;
         const token = jwt.sign(email, process.env.ACCESS_TOKEN_SECRET, {
-          expiresIn: "7d",
+          expiresIn: "30d",
         });
 
         res.send({ token });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res
+          .status(500)
+          .send({ success: false, message: "Internal server error" });
       }
     });
 
@@ -106,14 +108,14 @@ async function run() {
 
         if (user?.role !== "admin") {
           return res.status(403).send({
-            error: true,
+            success: false,
             message: "Forbidden message! You are not admin!",
           });
         }
         next();
       } catch (error) {
         return res.status(403).send({
-          error: true,
+          success: false,
           message: "Forbidden! You are not an admin!",
         });
       }
@@ -134,14 +136,14 @@ async function run() {
 
         if (user?.role !== "instructor") {
           return res.status(403).send({
-            error: true,
+            success: false,
             message: "Forbidden message! You are not instructor!",
           });
         }
         next();
       } catch (error) {
         return res.status(403).send({
-          error: true,
+          success: false,
           message: "Forbidden! You are not an instructor!",
         });
       }
@@ -162,14 +164,14 @@ async function run() {
 
         if (user?.role !== "student") {
           return res.status(403).send({
-            error: true,
+            success: false,
             message: "Forbidden message! You are not student!",
           });
         }
         next();
       } catch (error) {
         return res.status(403).send({
-          error: true,
+          success: false,
           message: "Forbidden! You are not an student!",
         });
       }
@@ -184,17 +186,23 @@ async function run() {
         if (!users) {
           throw new Error("User not found here!");
         }
+        const totalData = await usersCollection.countDocuments();
 
-        res.send(users);
+        res.send({
+          success: true,
+          message: "Get all users retrieve successfully!",
+          totalData: totalData,
+          data: users,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* get a user by to db
     app.get("/user/:id", verifyJWT, async (req, res) => {
       try {
-        const {id} = req.params;
+        const { id } = req.params;
         if (!id || !ObjectId.isValid(id)) {
           throw new Error("Invalid or missing id parameter");
         }
@@ -206,14 +214,18 @@ async function run() {
           throw new Error("User not found here!");
         }
 
-        res.send(user);
+        res.send({
+          success: true,
+          message: "Get a user retrieve successfully!",
+          data: user,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* get all instructor
-    app.get("/instructors", async (req, res) => {
+    app.get("/instructors", verifyJWT, async (req, res) => {
       try {
         const instructors = await usersCollection
           .find({ role: "instructor" })
@@ -221,15 +233,43 @@ async function run() {
         if (!instructors) {
           throw new Error("Instructors not found here!");
         }
+        const totalData = await usersCollection.countDocuments({ role: "instructor" });
 
-        res.send(instructors);
+        res.send({
+          success: true,
+          message: "Get all instructors retrieve successfully!",
+          totalData: totalData,
+          data: instructors,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
+      }
+    });
+
+    //* get all students
+    app.get("/students", verifyJWT, async (req, res) => {
+      try {
+        const students = await usersCollection
+          .find({ role: "student" })
+          .toArray();
+        if (!students) {
+          throw new Error("Students not found here!");
+        }
+        const totalData = await usersCollection.countDocuments({ role: "student" });
+
+        res.send({
+          success: true,
+          message: "Get all students retrieve successfully!",
+          totalData: totalData,
+          data: students,
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* Get user by email
-    app.get("/users/:email", async (req, res) => {
+    app.get("/users/:email", verifyJWT, async (req, res) => {
       try {
         const { email } = req.params;
 
@@ -238,9 +278,13 @@ async function run() {
           throw new Error("User not found here!");
         }
 
-        res.send(user);
+        res.send({
+          success: true,
+          message: "Get a user retrieve successfully!",
+          data: user,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
@@ -249,9 +293,6 @@ async function run() {
       try {
         const { email } = req.params;
         const user = req.body;
-
-        //? Set createdAt field to current timestamp
-        user.createdAt = new Date();
 
         const saveUser = await usersCollection.updateOne(
           { email: email },
@@ -263,12 +304,12 @@ async function run() {
 
         res.send(saveUser);
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* make admin
-    app.patch("/users/admin/:id", async (req, res) => {
+    app.patch("/users/admin/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         if (!id || !ObjectId.isValid(id)) {
@@ -283,9 +324,14 @@ async function run() {
         };
 
         const result = await usersCollection.updateOne(filter, updateDoc);
-        res.send(result);
+
+        res.send({
+          success: true,
+          message: "Make admin successfully!",
+          data: result,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
@@ -303,14 +349,19 @@ async function run() {
         }
 
         const result = { admin: user?.role === "admin" };
-        res.send(result);
+
+        res.send({
+          success: true,
+          message: "Get a admin successfully!",
+          data: result,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* make Instructor
-    app.patch("/users/instructor/:id", async (req, res) => {
+    app.patch("/users/instructor/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         if (!id || !ObjectId.isValid(id)) {
@@ -325,13 +376,18 @@ async function run() {
         };
 
         const result = await usersCollection.updateOne(filter, updateDoc);
-        res.send(result);
+
+        res.send({
+          success: true,
+          message: "Make a instructor successfully!",
+          data: result,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
-    //* get instructors and secure route
+    //* get instructor and secure route
     app.get("/users/instructor/:email", verifyJWT, async (req, res) => {
       try {
         const { email } = req.params;
@@ -345,14 +401,19 @@ async function run() {
         }
 
         const result = { instructor: user?.role === "instructor" };
-        res.send(result);
+
+        res.send({
+          success: true,
+          message: "Get a instructor successfully!",
+          data: result,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
     });
 
     //* Update user by email in DB
-    app.put("/user/:email", async (req, res) => {
+    app.put("/user/:email", verifyJWT, async (req, res) => {
       try {
         const { email } = req.params;
         const user = req.body;
@@ -365,14 +426,18 @@ async function run() {
           { upsert: true }
         );
 
-        res.send(result);
+        res.send({
+          success: true,
+          message: "Update a user successfully!",
+          data: result,
+        });
       } catch (error) {
         res.status(500).send({ error: true, message: "Internal server error" });
       }
     });
 
     //* delete a user
-    app.delete("/user/:id", async (req, res) => {
+    app.delete("/user/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const { id } = req.params;
         if (!id || !ObjectId.isValid(id)) {
@@ -382,7 +447,11 @@ async function run() {
         const filter = { _id: new ObjectId(id) };
         const result = await usersCollection.deleteOne(filter);
 
-        res.send(result);
+        res.send({
+          success: true,
+          message: "Delete a user successfully!",
+          data: result,
+        });
       } catch (error) {
         res.status(500).send({ error: true, message: "Internal server error" });
       }
@@ -483,21 +552,29 @@ async function run() {
     });
 
     //* get all class by email instructor
-    app.get("/myClass/:email", async (req, res) => {
+    app.get("/my-class", async (req, res) => {
       try {
-        const { email } = req.params;
-        if (!email) {
-          res.send([]);
+        const { email } = req.query;
+
+        const result = await classCollection
+          .find({ "instructor.email": email })
+          .toArray();
+        if (!result || result.length === 0) {
+          return res.status(404).send({
+            success: false,
+            message: "No classes found for the provided email",
+          });
         }
 
-        const result = await classCollection.find({ email: email }).toArray();
-        if (!result) {
-          throw new Error("Instructor all classes not found !");
-        }
-
-        res.send(result);
+        res.status(200).send({
+          success: true,
+          message: "Classes retrieved successfully",
+          data: result,
+        });
       } catch (error) {
-        res.status(500).send({ error: true, message: "Internal server error" });
+        res
+          .status(500)
+          .send({ success: false, message: "Internal server error" });
       }
     });
 
