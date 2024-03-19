@@ -588,6 +588,32 @@ async function run() {
       }
     });
 
+    //* get a class to db
+    app.get("/classes/:id", verifyJWT, async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!id || !ObjectId.isValid(id)) {
+          throw new Error("Invalid or missing id parameter");
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const classes = await classCollection.findOne(filter);
+        if (!classes) {
+          throw new Error("Class is not found !");
+        }
+
+        res.send({
+          success: true,
+          message: "Get a course successfully!",
+          data: classes,
+        });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ success: false, message: "Internal server error" });
+      }
+    });
+
     //* get all approve class to db
     app.get("/approve-class", async (req, res) => {
       try {
@@ -688,7 +714,7 @@ async function run() {
     //* Give feedback A class by admin feed message
     app.patch("/class/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        const classData = req.body;
+        const feedback = req.body;
 
         const { id } = req.params;
         if (!id || !ObjectId.isValid(id)) {
@@ -698,7 +724,7 @@ async function run() {
         const filter = { _id: new ObjectId(id) };
         const options = { upsert: true };
         const updateDoc = {
-          $set: classData,
+          $set: feedback,
         };
         const result = await classCollection.updateOne(
           filter,
@@ -810,7 +836,7 @@ async function run() {
     //? *********** SELECT CLASS RELATE APIS *************/
 
     //* get all selected class by student email
-    app.get("/selectedClass", verifyJWT, verifyStudents, async (req, res) => {
+    app.get("/selected-class", verifyJWT, verifyStudents, async (req, res) => {
       try {
         const { email } = req.query;
         if (!email) {
@@ -841,9 +867,28 @@ async function run() {
     });
 
     //* save (select) class by student
-    app.post("/selectClass", verifyJWT, verifyStudents, async (req, res) => {
+    app.post("/select-class", verifyJWT, verifyStudents, async (req, res) => {
       try {
         const classData = req.body;
+        const { course } = req.body;
+
+        const filter = { _id: new ObjectId(course) };
+        const classes = await classCollection.findOne(filter);
+        if (!classes) {
+          throw new Error("Class is not found !");
+        }
+
+        const update = {
+          $inc: {
+            seats: -1,
+            enrolledCourse: 1,
+          },
+        };
+
+        const updateCourse = await classCollection.updateOne(filter, update);
+        if (!updateCourse || updateCourse.modifiedCount === 0) {
+          throw new Error("Failed to update class details !");
+        }
 
         const result = await selectClassCollection.insertOne(classData);
         if (!result) {
@@ -853,7 +898,10 @@ async function run() {
         res.status(200).send({
           success: true,
           message: "Select course by student successfully!",
-          data: result,
+          data: {
+            updateData: updateCourse,
+            result: result
+          },
         });
       } catch (error) {
         res
