@@ -618,7 +618,7 @@ async function run() {
     app.get("/approve-class", async (req, res) => {
       try {
         const result = await classCollection
-          .find({ status: "approved" })
+          .find({ status: "approved" }).sort({ enrolledCourse: -1 })
           .toArray();
         if (!result) {
           throw new Error("Approved class not found !");
@@ -851,7 +851,7 @@ async function run() {
         }
 
         const result = await selectClassCollection
-          .find({ email: email })
+          .find({ "studentInfo.email": email })
           .toArray();
 
         res.status(200).send({
@@ -870,25 +870,6 @@ async function run() {
     app.post("/select-class", verifyJWT, verifyStudents, async (req, res) => {
       try {
         const classData = req.body;
-        const { course } = req.body;
-
-        const filter = { _id: new ObjectId(course) };
-        const classes = await classCollection.findOne(filter);
-        if (!classes) {
-          throw new Error("Class is not found !");
-        }
-
-        const update = {
-          $inc: {
-            seats: -1,
-            enrolledCourse: 1,
-          },
-        };
-
-        const updateCourse = await classCollection.updateOne(filter, update);
-        if (!updateCourse || updateCourse.modifiedCount === 0) {
-          throw new Error("Failed to update class details !");
-        }
 
         const result = await selectClassCollection.insertOne(classData);
         if (!result) {
@@ -898,32 +879,6 @@ async function run() {
         res.status(200).send({
           success: true,
           message: "Select course by student successfully!",
-          data: {
-            updateData: updateCourse,
-            result: result
-          },
-        });
-      } catch (error) {
-        res
-          .status(500)
-          .send({ success: false, message: "Internal server error" });
-      }
-    });
-
-    //* delete select class by student
-    app.delete("/class/:id", verifyJWT, verifyStudents, async (req, res) => {
-      try {
-        const { id } = req.params;
-        if (!id || !ObjectId.isValid(id)) {
-          throw new Error("Invalid or missing id parameter");
-        }
-
-        const query = { _id: new ObjectId(id) };
-        const result = await selectClassCollection.deleteOne(query);
-
-        res.status(200).send({
-          success: true,
-          message: "Delete to select course successfully!",
           data: result,
         });
       } catch (error) {
@@ -933,18 +888,46 @@ async function run() {
       }
     });
 
+    //* delete select class by student
+    app.delete(
+      "/select-class/:id",
+      verifyJWT,
+      verifyStudents,
+      async (req, res) => {
+        try {
+          const { id } = req.params;
+          if (!id || !ObjectId.isValid(id)) {
+            throw new Error("Invalid or missing id parameter");
+          }
+
+          const query = { _id: new ObjectId(id) };
+          const result = await selectClassCollection.deleteOne(query);
+
+          res.status(200).send({
+            success: true,
+            message: "Delete to select course successfully!",
+            data: result,
+          });
+        } catch (error) {
+          res
+            .status(500)
+            .send({ success: false, message: "Internal server error" });
+        }
+      }
+    );
+
     //? ************ ENROLL CLASS RELATED APIS **********/
 
     //* get student all enroll class by email
-    app.get("/enrollClass", verifyJWT, verifyStudents, async (req, res) => {
+    app.get("/enroll-class", verifyJWT, verifyStudents, async (req, res) => {
       try {
-        const email = req.query.email;
+        const { email } = req.query;
         if (!email) {
           res.send([]);
         }
 
         const result = await paymentClassCollection
-          .find({ email: email })
+          .find({ "studentInfo.email": email })
           .sort({ date: -1 })
           .toArray();
 
@@ -983,9 +966,30 @@ async function run() {
     //? ********** PAYMENT RELATED APIS ***********/
 
     //* save payment class data to database
-    app.post("/paymentClass", async (req, res) => {
+    app.post("/payment-class", async (req, res) => {
       try {
         const classData = req.body;
+        const { classInfo } = req.body;
+        const course = classInfo._id;
+
+        const filter = { _id: new ObjectId(course) };
+        const classes = await classCollection.findOne(filter);
+        if (!classes) {
+          throw new Error("Class is not found !");
+        }
+
+        const update = {
+          $inc: {
+            seats: -1,
+            enrolledCourse: 1,
+          },
+        };
+
+        const updateCourse = await classCollection.updateOne(filter, update);
+        if (!updateCourse || updateCourse.modifiedCount === 0) {
+          throw new Error("Failed to update class details !");
+        }
+
         const result = await paymentClassCollection.insertOne(classData);
 
         const query = { _id: new ObjectId(classData._id) };
@@ -995,6 +999,7 @@ async function run() {
           success: true,
           message: "Payment a course successfully!",
           data: result,
+          updateResult: updateCourse,
           deleteResult: deleteResult,
         });
       } catch (error) {
